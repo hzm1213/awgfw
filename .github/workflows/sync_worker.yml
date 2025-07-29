@@ -1,0 +1,53 @@
+name: Sync _worker.js and wrangler.toml from edgetunnel
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 每天 UTC 08:00（= 美西时间凌晨 1 点）
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+
+      - name: Download _worker.js from upstream
+        run: |
+          curl -sL https://raw.githubusercontent.com/cmliu/edgetunnel/main/_worker.js -o new_worker.js
+
+      - name: Download wrangler.toml from upstream
+        run: |
+          curl -sL https://raw.githubusercontent.com/cmliu/edgetunnel/main/wrangler.toml -o new_wrangler.toml
+
+      - name: Check for differences
+        id: check_diff
+        run: |
+          CHANGED=false
+          if ! cmp -s new_worker.js _worker.js; then
+            echo "🔁 _worker.js changed"
+            mv new_worker.js _worker.js
+            CHANGED=true
+          else
+            echo "_worker.js unchanged"
+          fi
+
+          if ! cmp -s new_wrangler.toml wrangler.toml; then
+            echo "🔁 wrangler.toml changed"
+            mv new_wrangler.toml wrangler.toml
+            CHANGED=true
+          else
+            echo "wrangler.toml unchanged"
+          fi
+
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.check_diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _worker.js wrangler.toml
+          git commit -m "🔄 Sync _worker.js & wrangler.toml from edgetunnel"
+          git push
